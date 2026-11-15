@@ -104,6 +104,8 @@ class MainActivity : ComponentActivity() {
 fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
     var recognizedText by remember { mutableStateOf("") }
     var dueText by remember { mutableStateOf<String?>(null) }
+    var projectLabel by remember { mutableStateOf(prefs.projectTitle) }
+    var showPicker by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Нажми и скажи задачу") }
     var statusColor by remember { mutableStateOf(Palette.TextSub) }
     var listening by remember { mutableStateOf(false) }
@@ -215,16 +217,18 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
                     .clip(RoundedCornerShape(20.dp))
                     .background(Palette.CardBg)
                     .border(1.dp, Palette.CardBorder, RoundedCornerShape(20.dp))
-                    .clickable(onClick = onChangeProject)
+                    .clickable { showPicker = true }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(text = "Проект: ", fontSize = 13.sp, color = Palette.TextSub)
                 Text(
-                    text = prefs.projectTitle.ifBlank { "выбрать" },
+                    text = projectLabel.ifBlank { "выбрать" },
                     fontSize = 13.sp,
                     color = Palette.VioletHi,
                 )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(text = "▾", fontSize = 12.sp, color = Palette.TextSub)
             }
             Spacer(modifier = Modifier.weight(1f))
             TaskCard(recognizedText, dueText, status, statusColor)
@@ -238,6 +242,24 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
             Spacer(modifier = Modifier.height(48.dp))
             Text(text = "M2 · голос → задача в Vikunja", fontSize = 12.sp, color = Palette.TextDim)
             Spacer(modifier = Modifier.height(28.dp))
+        }
+        if (showPicker) {
+            ProjectPickerDialog(
+                prefs = prefs,
+                onDismiss = { showPicker = false },
+                onPick = { project ->
+                    prefs.projectId = project.id
+                    prefs.projectTitle = project.title
+                    projectLabel = project.title
+                    showPicker = false
+                    status = "Проект: ${project.title}"
+                    statusColor = Palette.TextSub
+                },
+                onOpenSettings = {
+                    showPicker = false
+                    onChangeProject()
+                },
+            )
         }
     }
 }
