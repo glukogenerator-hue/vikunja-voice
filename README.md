@@ -16,6 +16,13 @@ Android-приложение: **говоришь задачу голосом —
 Распознавание речи — системное Android (`SpeechRecognizer`, `ru-RU`), озвучка ответов не нужна.
 План развития (даты из фразы через локальную LLM, офлайн-распознавание, виджет) — в [PLAN.md](PLAN.md).
 
+## Скачать
+
+Готовый подписанный APK — в [Releases](https://github.com/glukogenerator-hue/vikunja-voice/releases).
+
+Релиз подписан отдельным ключом (`keystore.properties`, в git не попадает), поэтому установить
+его поверх debug-сборки нельзя — сначала удали debug-версию (настройки сервера/токена сбросятся).
+
 ## Сборка
 
 Нужны JDK 17 и Android SDK (platform 34, build-tools 34.0.0). Android Studio не обязателен:
