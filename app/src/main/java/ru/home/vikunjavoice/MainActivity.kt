@@ -75,7 +75,7 @@ import java.util.Locale
 private const val MIC_SIZE_DP = 180
 
 /** Постоянная область под кольца: layout не меняется, кнопка не прыгает. */
-private val RING_AREA_DP = 280.dp
+private val RING_AREA_DP = 250.dp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -306,7 +306,7 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(modifier = Modifier.height(56.dp))
+            Spacer(modifier = Modifier.height(28.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -321,7 +321,7 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
                     color = Palette.TextDim,
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
@@ -342,7 +342,7 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
             }
             Spacer(modifier = Modifier.weight(1f))
             TaskCard(recognizedText, dueText, status, statusColor)
-            Spacer(modifier = Modifier.weight(1.1f))
+            Spacer(modifier = Modifier.weight(1f))
             MicArea(
                 listening = listening,
                 enabled = !sending,
@@ -350,9 +350,9 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
                 onHoldStart = { beginRecording() },
                 onHoldEnd = { endRecording() },
             )
-            Spacer(modifier = Modifier.height(48.dp))
-            Text(text = "M2 · голос → задача в Vikunja", fontSize = 12.sp, color = Palette.TextDim)
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(text = "Голос → задача в Vikunja", fontSize = 12.sp, color = Palette.TextDim)
+            Spacer(modifier = Modifier.height(12.dp))
         }
         if (showPicker) {
             ProjectPickerDialog(
@@ -388,8 +388,8 @@ private fun TaskCard(text: String, dueText: String?, status: String, statusColor
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 190.dp)
-                .padding(horizontal = 24.dp, vertical = 24.dp),
+                .heightIn(min = 140.dp)
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -397,7 +397,7 @@ private fun TaskCard(text: String, dueText: String?, status: String, statusColor
                     text = text.ifBlank { "Здесь появится твоя задача" },
                     fontSize = 22.sp,
                     lineHeight = 30.sp,
-                    maxLines = 3,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
                     color = if (text.isBlank()) Palette.TextSub else Palette.TextMain,
@@ -480,9 +480,9 @@ private fun MicArea(
                 TalkingFaceIcon(tint = Palette.BgTop, modifier = Modifier.size(76.dp))
             }
         }
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         Box(
-            modifier = Modifier.height(90.dp),
+            modifier = Modifier.height(56.dp),
             contentAlignment = Alignment.Center,
         ) {
             if (listening) {
