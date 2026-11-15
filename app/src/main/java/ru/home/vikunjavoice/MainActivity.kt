@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -56,8 +57,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -67,6 +70,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private const val MIC_SIZE_DP = 180
+
+/** Постоянная область под кольца: layout не меняется, кнопка не прыгает. */
+private val RING_AREA_DP = 280.dp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -149,9 +155,18 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
         recognizedText = it
         submit(it)
     }
+    var smoothAmp by remember { mutableStateOf(0f) }
+    var lastShift by remember { mutableStateOf(0L) }
     val onRms: (Float) -> Unit = { rms ->
-        for (i in 0 until wave.size - 1) wave[i] = wave[i + 1]
-        wave[wave.size - 1] = rms
+        // Сырой RMS дёргается — сглаживаем и двигаем волну не чаще ~14 раз/с.
+        val target = ((rms + 2f) / 12f).coerceIn(0f, 1f)
+        smoothAmp = smoothAmp * 0.7f + target * 0.3f
+        val nowMs = System.currentTimeMillis()
+        if (nowMs - lastShift >= 70L) {
+            lastShift = nowMs
+            for (i in 0 until wave.size - 1) wave[i] = wave[i + 1]
+            wave[wave.size - 1] = smoothAmp
+        }
     }
     val onDone: () -> Unit = {
         listening = false
@@ -271,33 +286,42 @@ private fun TaskCard(text: String, dueText: String?, status: String, statusColor
         border = BorderStroke(1.dp, Palette.CardBorder),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+        // Фиксированная минимальная высота: частичные результаты распознавания
+        // не должны менять размер карточки и сдвигать кнопку с волной.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 190.dp)
+                .padding(horizontal = 24.dp, vertical = 24.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = text.ifBlank { "Здесь появится твоя задача" },
-                fontSize = 22.sp,
-                lineHeight = 30.sp,
-                textAlign = TextAlign.Center,
-                color = if (text.isBlank()) Palette.TextSub else Palette.TextMain,
-            )
-            if (dueText != null) {
-                Spacer(modifier = Modifier.height(8.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = dueText,
-                    fontSize = 17.sp,
-                    color = Palette.VioletHi,
+                    text = text.ifBlank { "Здесь появится твоя задача" },
+                    fontSize = 22.sp,
+                    lineHeight = 30.sp,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    color = if (text.isBlank()) Palette.TextSub else Palette.TextMain,
+                )
+                if (dueText != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = dueText,
+                        fontSize = 17.sp,
+                        color = Palette.VioletHi,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = status,
+                    fontSize = 13.sp,
+                    color = statusColor,
                     textAlign = TextAlign.Center,
                 )
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = status,
-                fontSize = 13.sp,
-                color = statusColor,
-                textAlign = TextAlign.Center,
-            )
         }
     }
 }
@@ -318,10 +342,22 @@ private fun MicArea(
     )
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier.size(RING_AREA_DP),
+            contentAlignment = Alignment.Center,
+        ) {
             if (listening) {
-                Ring(progress = ring)
-                Ring(progress = (ring + 0.5f) % 1f)
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val baseR = MIC_SIZE_DP.dp.toPx() / 2f
+                    val maxR = size.minDimension / 2f - 3.dp.toPx()
+                    listOf(ring, (ring + 0.5f) % 1f).forEach { progress ->
+                        drawCircle(
+                            color = Palette.VioletHi.copy(alpha = (1f - progress) * 0.35f),
+                            radius = baseR + (maxR - baseR) * progress,
+                            style = Stroke(width = 2.dp.toPx()),
+                        )
+                    }
+                }
             }
             Box(
                 modifier = Modifier
@@ -356,23 +392,13 @@ private fun MicArea(
 }
 
 @Composable
-private fun Ring(progress: Float) {
-    val diameter = MIC_SIZE_DP.dp + 130.dp * progress
-    Box(
-        modifier = Modifier
-            .size(diameter)
-            .border(2.dp, Palette.VioletHi.copy(alpha = (1f - progress) * 0.35f), CircleShape)
-    )
-}
-
-@Composable
 private fun WaveRow(wave: SnapshotStateList<Float>) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        wave.forEach { rms ->
-            val h = 10.dp + (rms.coerceIn(0f, 30f) * 2.5f).dp
+        wave.forEach { amp ->
+            val h = 8.dp + (amp.coerceIn(0f, 1f) * 64f).dp
             Box(
                 modifier = Modifier
                     .width(5.dp)
