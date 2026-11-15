@@ -4,7 +4,7 @@ Android-приложение: **говоришь задачу голосом —
 
 | Голос | Задачи |
 |:---:|:---:|
-| ![Голос](docs/screens/voice.png) | ![Задачи](docs/screens/tasks.png) |
+| ![Голос](docs/screens/voice_screen.png) | ![Задачи](docs/screens/tasks_screen.png) |
 
 ## Как работает
 
