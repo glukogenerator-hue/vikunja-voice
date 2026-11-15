@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="new_task"
+        android:shortcutShortLabel="@string/shortcut_new_task">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetClass="ru.home.vikunjavoice.MainActivity"
+            android:targetPackage="ru.home.vikunjavoice">
+            <extra
+                android:name="start_listening"
+                android:value="true" />
+        </intent>
+    </shortcut>
+</shortcuts>

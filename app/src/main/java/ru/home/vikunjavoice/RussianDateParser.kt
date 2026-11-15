@@ -74,6 +74,9 @@ object RussianDateParser {
         }
 
         // --- относительное время: «через час», «через полчаса», «через 30 минут» ---
+        Regex("через\\s+полтора\\s+часа").find(lower)?.let { m ->
+            relative = relative ?: now.plusMinutes(90); take(m)
+        }
         Regex("через\\s+полчаса").find(lower)?.let { m ->
             relative = now.plusMinutes(30); take(m)
         }
@@ -161,6 +164,25 @@ object RussianDateParser {
                     take(m)
                 }
             }
+
+        // --- «утром/днём/вечером/ночью», «к вечеру» ---
+        Regex("(?<!$LETTER)(?:к|ко)\\s+(утру|вечеру)(?!$LETTER)").find(lower)?.let { m ->
+            if (time == null) {
+                time = if (m.groupValues[1] == "утру") LocalTime.of(9, 0) else LocalTime.of(18, 0)
+            }
+            take(m)
+        }
+        Regex("(?<!$LETTER)(утром|днём|днем|вечером|ночью)(?!$LETTER)").find(lower)?.let { m ->
+            if (time == null) {
+                time = when (m.groupValues[1]) {
+                    "утром" -> LocalTime.of(9, 0)
+                    "днём", "днем" -> LocalTime.of(14, 0)
+                    "вечером" -> LocalTime.of(18, 0)
+                    else -> LocalTime.of(0, 0)
+                }
+            }
+            take(m)
+        }
 
         // --- собрать результат ---
         val due: ZonedDateTime? = when {

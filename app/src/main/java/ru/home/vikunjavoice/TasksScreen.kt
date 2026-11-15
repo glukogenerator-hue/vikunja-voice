@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -67,6 +69,7 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
     var reloadKey by remember { mutableStateOf(0) }
     var toDelete by remember { mutableStateOf<VikunjaTask?>(null) }
     var showCompleted by remember { mutableStateOf(prefs.showCompleted) }
+    var filter by remember { mutableStateOf(TaskFilter.ALL) }
     val scope = rememberCoroutineScope()
     val api = remember { VikunjaApi(prefs.serverUrl, prefs.token) }
 
@@ -192,10 +195,33 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
                     ),
                 )
             }
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip("Все", filter == TaskFilter.ALL) { filter = TaskFilter.ALL }
+                FilterChip("Просроченные", filter == TaskFilter.OVERDUE) {
+                    filter = TaskFilter.OVERDUE
+                }
+                FilterChip("Сегодня", filter == TaskFilter.TODAY) { filter = TaskFilter.TODAY }
+            }
             Spacer(modifier = Modifier.height(12.dp))
 
-            val visibleTasks =
-                if (showCompleted) tasks else tasks.filterNot { it.done }
+            val nowInstant = Instant.now()
+            val today = LocalDate.now()
+            val byFilter = when (filter) {
+                TaskFilter.ALL -> tasks
+                TaskFilter.OVERDUE -> tasks.filter { task ->
+                    !task.done && task.dueDate?.let { raw ->
+                        runCatching { Instant.parse(raw) }.getOrNull()?.isBefore(nowInstant)
+                    } == true
+                }
+                TaskFilter.TODAY -> tasks.filter { task ->
+                    task.dueDate?.let { raw ->
+                        runCatching { Instant.parse(raw) }.getOrNull()
+                            ?.atZone(ZoneId.systemDefault())?.toLocalDate() == today
+                    } == true
+                }
+            }
+            val visibleTasks = if (showCompleted) byFilter else byFilter.filterNot { it.done }
 
             when {
                 loading -> Box(
@@ -217,6 +243,8 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
                             text = when {
                                 error != null -> "Ошибка: $error"
                                 tasks.isEmpty() -> "В проекте пока нет задач"
+                                filter == TaskFilter.OVERDUE -> "Просроченных задач нет"
+                                filter == TaskFilter.TODAY -> "На сегодня задач нет"
                                 else -> "Все задачи выполнены"
                             },
                             fontSize = 14.sp,
@@ -374,4 +402,30 @@ private fun dueLine(task: VikunjaTask): Pair<String, Boolean>? {
     val instant = runCatching { Instant.parse(iso) }.getOrNull() ?: return null
     val text = instant.atZone(ZoneId.systemDefault()).format(DUE_FORMAT)
     return text to instant.isBefore(Instant.now())
+}
+
+private enum class TaskFilter { ALL, OVERDUE, TODAY }
+
+@Composable
+private fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(
+                if (selected) Palette.VioletHi.copy(alpha = 0.16f) else Color.Transparent
+            )
+            .border(
+                width = 1.dp,
+                color = if (selected) Palette.VioletHi else Palette.CardBorder,
+                shape = RoundedCornerShape(14.dp),
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+    ) {
+        Text(
+            text = text,
+            fontSize = 12.sp,
+            color = if (selected) Palette.VioletHi else Palette.TextSub,
+        )
+    }
 }

@@ -130,4 +130,25 @@ class RussianDateParserTest {
         assertEquals("Созвон", p.title)
         assertEquals(at(2026, 11, 29, 9), p.due)
     }
+
+    @Test
+    fun `утром по умолчанию девять`() {
+        val p = parse("завтра утром позвонить")
+        assertEquals("Позвонить", p.title)
+        assertEquals(at(2026, 11, 16, 9), p.due)
+    }
+
+    @Test
+    fun `вечером по умолчанию восемнадцать`() {
+        val p = parse("сегодня вечером отчёт")
+        assertEquals("Отчёт", p.title)
+        assertEquals(at(2026, 11, 15, 18), p.due)
+    }
+
+    @Test
+    fun `через полтора часа`() {
+        val p = parse("через полтора часа позвонить")
+        assertEquals("Позвонить", p.title)
+        assertEquals(now.plusMinutes(90), p.due)
+    }
 }

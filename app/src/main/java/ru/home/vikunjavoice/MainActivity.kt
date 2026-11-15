@@ -7,7 +7,10 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -50,6 +53,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -94,10 +98,27 @@ private const val MIC_SIZE_DP = 180
 private val RING_AREA_DP = 250.dp
 
 class MainActivity : ComponentActivity() {
+
+    private companion object {
+        const val EXTRA_START_LISTENING = "start_listening"
+    }
+
+    private var sharedText by mutableStateOf<String?>(null)
+    private var autoListen by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val appContext = applicationContext
+        Notifications.ensureChannel(appContext)
         scheduleProjectsSync(appContext)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
+        sharedText = extractShared(intent)
+        autoListen = intent?.getBooleanExtra(EXTRA_START_LISTENING, false) == true
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
@@ -109,42 +130,67 @@ class MainActivity : ComponentActivity() {
             ) {
                 val prefs = remember { Prefs(appContext) }
                 var configured by remember { mutableStateOf(prefs.configured) }
-                if (configured) {
-                    val pagerState = rememberPagerState(pageCount = { 2 })
-                    val scope = rememberCoroutineScope()
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Palette.BgTop)
-                    ) {
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = Modifier.weight(1f),
-                        ) { page ->
-                            if (page == 0) {
-                                VoiceScreen(
-                                    prefs = prefs,
-                                    onChangeProject = { configured = false },
-                                )
-                            } else {
-                                TasksScreen(
-                                    prefs = prefs,
-                                    onOpenSettings = { configured = false },
-                                )
-                            }
-                        }
-                        BottomTabs(
-                            selected = pagerState.currentPage,
-                            onSelect = { index ->
-                                scope.launch { pagerState.animateScrollToPage(index) }
-                            },
-                        )
-                    }
-                } else {
+                if (!configured) {
                     SetupScreen(prefs = prefs, onDone = { configured = true })
+                } else {
+                    val pendingShare = sharedText
+                    if (pendingShare != null) {
+                        ShareScreen(
+                            prefs = prefs,
+                            sharedText = pendingShare,
+                            onDone = { sharedText = null },
+                        )
+                    } else {
+                        val pagerState = rememberPagerState(pageCount = { 2 })
+                        val scope = rememberCoroutineScope()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Palette.BgTop)
+                        ) {
+                            HorizontalPager(
+                                state = pagerState,
+                                modifier = Modifier.weight(1f),
+                            ) { page ->
+                                if (page == 0) {
+                                    VoiceScreen(
+                                        prefs = prefs,
+                                        onChangeProject = { configured = false },
+                                        autoStart = autoListen,
+                                        onAutoStartConsumed = { autoListen = false },
+                                    )
+                                } else {
+                                    TasksScreen(
+                                        prefs = prefs,
+                                        onOpenSettings = { configured = false },
+                                    )
+                                }
+                            }
+                            BottomTabs(
+                                selected = pagerState.currentPage,
+                                onSelect = { index ->
+                                    scope.launch { pagerState.animateScrollToPage(index) }
+                                },
+                            )
+                        }
+                    }
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        extractShared(intent)?.let { sharedText = it }
+        if (intent.getBooleanExtra(EXTRA_START_LISTENING, false)) autoListen = true
+    }
+
+    /** Текст, которым поделились из другого приложения. */
+    private fun extractShared(intent: Intent?): String? {
+        if (intent?.action != Intent.ACTION_SEND) return null
+        if (intent.type?.startsWith("text/") != true) return null
+        return intent.getStringExtra(Intent.EXTRA_TEXT)?.trim()?.takeIf { it.isNotBlank() }
     }
 }
 
@@ -161,6 +207,15 @@ private fun scheduleProjectsSync(context: Context) {
         "projects-sync",
         ExistingPeriodicWorkPolicy.KEEP,
         periodic,
+    )
+
+    val reminders = PeriodicWorkRequestBuilder<RemindersWorker>(30, TimeUnit.MINUTES)
+        .setConstraints(constraints)
+        .build()
+    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        "due-reminders",
+        ExistingPeriodicWorkPolicy.KEEP,
+        reminders,
     )
 
     if (ProjectsCache(context).isStale(3 * 60 * 60 * 1000L)) {
@@ -237,11 +292,13 @@ private fun TabItem(
     }
 }
 
-/**
- * Шаг 2: запись голоса → текст → задача уходит в выбранный проект Vikunja.
- */
 @Composable
-fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
+fun VoiceScreen(
+    prefs: Prefs,
+    onChangeProject: () -> Unit,
+    autoStart: Boolean = false,
+    onAutoStartConsumed: () -> Unit = {},
+) {
     var recognizedText by remember { mutableStateOf("") }
     var dueText by remember { mutableStateOf<String?>(null) }
     var projectLabel by remember { mutableStateOf(prefs.projectTitle) }
@@ -251,6 +308,8 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
     var listening by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf(false) }
     var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+    var lastCreatedId by remember { mutableStateOf<Long?>(null) }
+    var undoVisible by remember { mutableStateOf(false) }
     val wave = remember {
         mutableStateListOf<Float>().apply { repeat(26) { add(0f) } }
     }
@@ -272,15 +331,39 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
         statusColor = Palette.TextSub
         scope.launch {
             try {
-                VikunjaApi(prefs.serverUrl, prefs.token)
+                val id = VikunjaApi(prefs.serverUrl, prefs.token)
                     .createTask(prefs.projectId, parsed.title, dueIso)
+                lastCreatedId = id
+                undoVisible = true
                 status = "Задача создана ✓"
                 statusColor = Palette.VioletHi
+                // Через несколько секунд возможность отмены пропадает.
+                scope.launch {
+                    delay(6000)
+                    if (lastCreatedId == id) undoVisible = false
+                }
             } catch (e: Exception) {
                 status = "Не отправлено: ${e.message}"
                 statusColor = Palette.Error
             } finally {
                 sending = false
+            }
+        }
+    }
+
+    /** Удаляет только что созданную задачу (если распозналось не то). */
+    fun undoLastCreation() {
+        val id = lastCreatedId ?: return
+        lastCreatedId = null
+        undoVisible = false
+        scope.launch {
+            try {
+                VikunjaApi(prefs.serverUrl, prefs.token).deleteTask(id)
+                status = "Создание отменено"
+                statusColor = Palette.TextSub
+            } catch (e: Exception) {
+                status = "Не удалось отменить: ${e.message}"
+                statusColor = Palette.Error
             }
         }
     }
@@ -336,6 +419,10 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
         listening = true
         status = "Слушаю…"
         statusColor = Palette.TextSub
+        // Короткая вибрация подтверждает начало записи.
+        (activity.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)?.vibrate(
+            VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE)
+        )
         recognizer = startListening(activity, onStatus, onPartial, onFinal, onRms, onDone)
     }
 
@@ -356,6 +443,15 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
                 status = "Речь не распознана, попробуй ещё раз"
                 statusColor = Palette.TextSub
             }
+        }
+    }
+
+    // Запуск записи сразу, если пришли из ярлыка или виджета.
+    LaunchedEffect(autoStart) {
+        if (autoStart) {
+            onAutoStartConsumed()
+            delay(300)
+            beginRecording()
         }
     }
 
@@ -407,7 +503,14 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
                 Text(text = "▾", fontSize = 12.sp, color = Palette.TextSub)
             }
             Spacer(modifier = Modifier.weight(1f))
-            TaskCard(recognizedText, dueText, status, statusColor)
+            TaskCard(
+                text = recognizedText,
+                dueText = dueText,
+                status = status,
+                statusColor = statusColor,
+                undoVisible = undoVisible,
+                onUndo = { undoLastCreation() },
+            )
             Spacer(modifier = Modifier.weight(1f))
             MicArea(
                 listening = listening,
@@ -442,19 +545,25 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
 }
 
 @Composable
-private fun TaskCard(text: String, dueText: String?, status: String, statusColor: Color) {
+private fun TaskCard(
+    text: String,
+    dueText: String?,
+    status: String,
+    statusColor: Color,
+    undoVisible: Boolean,
+    onUndo: () -> Unit,
+) {
     Surface(
         shape = RoundedCornerShape(28.dp),
         color = Palette.CardBg,
         border = BorderStroke(1.dp, Palette.CardBorder),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        // Фиксированная минимальная высота: частичные результаты распознавания
-        // не должны менять размер карточки и сдвигать кнопку с волной.
+        // Все строки имеют фиксированные места: частичные результаты распознавания
+        // и появление «Отменить» не двигают кнопку с волной.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 140.dp)
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             contentAlignment = Alignment.Center,
         ) {
@@ -463,27 +572,61 @@ private fun TaskCard(text: String, dueText: String?, status: String, statusColor
                     text = text.ifBlank { "Здесь появится твоя задача" },
                     fontSize = 22.sp,
                     lineHeight = 30.sp,
+                    minLines = 2,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
                     color = if (text.isBlank()) Palette.TextSub else Palette.TextMain,
                 )
-                if (dueText != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (dueText != null) {
+                        Text(
+                            text = dueText,
+                            fontSize = 17.sp,
+                            color = Palette.VioletHi,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(34.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Text(
-                        text = dueText,
-                        fontSize = 17.sp,
-                        color = Palette.VioletHi,
+                        text = status,
+                        fontSize = 13.sp,
+                        color = statusColor,
                         textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = status,
-                    fontSize = 13.sp,
-                    color = statusColor,
-                    textAlign = TextAlign.Center,
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(20.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (undoVisible) {
+                        Text(
+                            text = "Отменить",
+                            fontSize = 13.sp,
+                            color = Palette.Amber,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable(onClick = onUndo)
+                                .padding(horizontal = 10.dp, vertical = 2.dp),
+                        )
+                    }
+                }
             }
         }
     }

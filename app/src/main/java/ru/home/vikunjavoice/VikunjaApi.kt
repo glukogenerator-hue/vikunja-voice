@@ -8,6 +8,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 data class VikunjaProject(val id: Long, val title: String)
@@ -17,6 +18,14 @@ data class VikunjaTask(
     val title: String,
     val done: Boolean,
     val dueDate: String?,
+)
+
+/** Задача с ближайшим сроком — для напоминаний. */
+data class DueTask(
+    val id: Long,
+    val title: String,
+    val dueDate: String,
+    val projectId: Long,
 )
 
 class ApiException(message: String) : Exception(message)
@@ -116,6 +125,48 @@ class VikunjaApi(serverUrl: String, private val token: String) {
                 .thenBy { it.dueDate == null }
                 .thenBy { it.dueDate ?: "" }
         )
+    }
+
+    /** Незавершённые задачи со сроком раньше [limitIso] (для напоминаний). */
+    suspend fun tasksDueBefore(limitIso: String): List<DueTask> = withContext(Dispatchers.IO) {
+        val filter = "done = false && due_date != \"0001-01-01T00:00:00Z\" && due_date < \"$limitIso\""
+        val encoded = URLEncoder.encode(filter, "UTF-8")
+        val out = mutableListOf<DueTask>()
+        var page = 1
+        while (page <= 3) {
+            val request = Request.Builder()
+                .url(
+                    "$base/api/v1/tasks?per_page=50&page=$page" +
+                        "&sort_by=due_date&order_by=asc&filter=$encoded"
+                )
+                .header("Authorization", "Bearer $token")
+                .get()
+                .build()
+            val batch = client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) throw ApiException(describe(response.code, body))
+                val array = JSONArray(body)
+                buildList {
+                    for (i in 0 until array.length()) {
+                        val item = array.getJSONObject(i)
+                        val due = item.optString("due_date")
+                        if (due.isBlank() || due.startsWith("0001-01-01")) continue
+                        add(
+                            DueTask(
+                                id = item.getLong("id"),
+                                title = item.optString("title"),
+                                dueDate = due,
+                                projectId = item.optLong("project_id"),
+                            )
+                        )
+                    }
+                }
+            }
+            out += batch
+            if (batch.size < 50) break
+            page++
+        }
+        out
     }
 
     /** Отметить задачу выполненной/невыполненной. */
