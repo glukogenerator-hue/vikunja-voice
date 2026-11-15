@@ -23,6 +23,18 @@ Android-приложение: **говоришь задачу голосом —
 Релиз подписан отдельным ключом (`keystore.properties`, в git не попадает), поэтому установить
 его поверх debug-сборки нельзя — сначала удали debug-версию (настройки сервера/токена сбросятся).
 
+## Релизы
+
+Тег `v*` запускает GitHub Actions: сборка подписанного APK и публикация релиза.
+
+```bash
+git tag v0.14
+git push origin v0.14
+```
+
+Подпись берётся из секретов репозитория: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
+`KEY_ALIAS`, `KEY_PASSWORD` (см. `.github/workflows/release.yml`).
+
 ## Сборка
 
 Нужны JDK 17 и Android SDK (platform 34, build-tools 34.0.0). Android Studio не обязателен:
