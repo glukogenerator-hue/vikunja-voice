@@ -31,6 +31,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -174,14 +175,14 @@ private fun scheduleProjectsSync(context: Context) {
     }
 }
 
-/** Нижние вкладки: текст + плавно проявляющийся индикатор. */
+/** Нижние вкладки: текст + плавно проявляющийся индикатор по ширине текста. */
 @Composable
 private fun BottomTabs(selected: Int, onSelect: (Int) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Palette.BgTop)
-            .padding(horizontal = 24.dp, vertical = 6.dp),
+            .background(Palette.BgBottom)
+            .padding(horizontal = 24.dp),
     ) {
         TabItem(
             text = "Голос",
@@ -212,22 +213,27 @@ private fun TabItem(
         animationSpec = tween(220),
         label = "tabIndicator",
     )
-    Column(
+    Box(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(top = 5.dp, bottom = 3.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(text = text, fontSize = 14.sp, color = textColor)
-        Spacer(modifier = Modifier.height(6.dp))
-        Box(
-            modifier = Modifier
-                .height(3.dp)
-                .width(26.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(Palette.VioletHi.copy(alpha = indicatorAlpha))
-        )
+        Column(
+            modifier = Modifier.width(IntrinsicSize.Max),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(text = text, fontSize = 14.sp, color = textColor)
+            Spacer(modifier = Modifier.height(4.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Palette.VioletHi.copy(alpha = indicatorAlpha))
+            )
+        }
     }
 }
 
