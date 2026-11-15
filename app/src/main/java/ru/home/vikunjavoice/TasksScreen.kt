@@ -23,8 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -59,7 +57,11 @@ private val DUE_FORMAT: DateTimeFormatter =
  * Тап по строке — «выполнено/не выполнено», «×» — удалить с подтверждением.
  */
 @Composable
-fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
+fun TasksScreen(
+    prefs: Prefs,
+    onOpenSettings: () -> Unit,
+    settingsRevision: Int = 0,
+) {
     var projectKey by remember { mutableStateOf(prefs.projectId) }
     var projectLabel by remember { mutableStateOf(prefs.projectTitle) }
     var showPicker by remember { mutableStateOf(false) }
@@ -68,12 +70,12 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var reloadKey by remember { mutableStateOf(0) }
     var toDelete by remember { mutableStateOf<VikunjaTask?>(null) }
-    var showCompleted by remember { mutableStateOf(prefs.showCompleted) }
+    var showCompleted by remember(settingsRevision) { mutableStateOf(prefs.showCompleted) }
     var filter by remember { mutableStateOf(TaskFilter.ALL) }
     val scope = rememberCoroutineScope()
     val api = remember { VikunjaApi(prefs.serverUrl, prefs.token) }
 
-    LaunchedEffect(projectKey, reloadKey) {
+    LaunchedEffect(projectKey, reloadKey, settingsRevision) {
         loading = true
         error = null
         try {
@@ -121,7 +123,7 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
                 .fillMaxSize()
                 .padding(horizontal = 24.dp),
         ) {
-            Spacer(modifier = Modifier.height(44.dp))
+            Spacer(modifier = Modifier.height(24.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -140,6 +142,15 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
+                    text = "⚙",
+                    fontSize = 18.sp,
+                    color = Palette.TextDim,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(onClick = onOpenSettings)
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+                Text(
                     text = "Обновить",
                     fontSize = 13.sp,
                     color = Palette.VioletHi,
@@ -149,53 +160,28 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                 )
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(18.dp))
                     .background(Palette.CardBg)
-                    .border(1.dp, Palette.CardBorder, RoundedCornerShape(20.dp))
+                    .border(1.dp, Palette.CardBorder, RoundedCornerShape(18.dp))
                     .clickable { showPicker = true }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(text = "Проект: ", fontSize = 13.sp, color = Palette.TextSub)
+                Text(text = "Проект: ", fontSize = 12.sp, color = Palette.TextSub)
                 Text(
                     text = projectLabel.ifBlank { "выбрать" },
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     color = Palette.VioletHi,
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(text = "▾", fontSize = 12.sp, color = Palette.TextSub)
+                Text(text = "▾", fontSize = 11.sp, color = Palette.TextSub)
             }
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Показывать выполненные",
-                    fontSize = 13.sp,
-                    color = Palette.TextSub,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Switch(
-                    checked = showCompleted,
-                    onCheckedChange = { checked ->
-                        showCompleted = checked
-                        prefs.showCompleted = checked
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Palette.BgTop,
-                        checkedTrackColor = Palette.VioletHi,
-                        uncheckedThumbColor = Palette.TextSub,
-                        uncheckedTrackColor = Palette.CardBorder,
-                    ),
-                )
-            }
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip("Все", filter == TaskFilter.ALL) { filter = TaskFilter.ALL }
                 FilterChip("Просроченные", filter == TaskFilter.OVERDUE) {
@@ -203,7 +189,7 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
                 }
                 FilterChip("Сегодня", filter == TaskFilter.TODAY) { filter = TaskFilter.TODAY }
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             val nowInstant = Instant.now()
             val today = LocalDate.now()
@@ -262,7 +248,7 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
 
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                     contentPadding = PaddingValues(bottom = 16.dp),
                 ) {
                     items(visibleTasks, key = { it.id }) { task ->
@@ -339,7 +325,7 @@ private fun TaskRow(task: VikunjaTask, onToggle: () -> Unit, onDelete: () -> Uni
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onToggle)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -420,11 +406,11 @@ private fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit) {
                 shape = RoundedCornerShape(14.dp),
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .padding(horizontal = 10.dp, vertical = 5.dp),
     ) {
         Text(
             text = text,
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             color = if (selected) Palette.VioletHi else Palette.TextSub,
         )
     }

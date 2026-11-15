@@ -130,8 +130,19 @@ class MainActivity : ComponentActivity() {
             ) {
                 val prefs = remember { Prefs(appContext) }
                 var configured by remember { mutableStateOf(prefs.configured) }
+                var showSettings by remember { mutableStateOf(false) }
+                var settingsRevision by remember { mutableStateOf(0) }
+                var lastPage by remember { mutableStateOf(0) }
                 if (!configured) {
                     SetupScreen(prefs = prefs, onDone = { configured = true })
+                } else if (showSettings) {
+                    SettingsScreen(
+                        prefs = prefs,
+                        onClose = {
+                            showSettings = false
+                            settingsRevision++
+                        },
+                    )
                 } else {
                     val pendingShare = sharedText
                     if (pendingShare != null) {
@@ -141,7 +152,13 @@ class MainActivity : ComponentActivity() {
                             onDone = { sharedText = null },
                         )
                     } else {
-                        val pagerState = rememberPagerState(pageCount = { 2 })
+                        val pagerState = rememberPagerState(
+                            initialPage = lastPage,
+                            pageCount = { 2 },
+                        )
+                        LaunchedEffect(pagerState.currentPage) {
+                            lastPage = pagerState.currentPage
+                        }
                         val scope = rememberCoroutineScope()
                         Column(
                             modifier = Modifier
@@ -156,13 +173,15 @@ class MainActivity : ComponentActivity() {
                                     VoiceScreen(
                                         prefs = prefs,
                                         onChangeProject = { configured = false },
+                                        onOpenSettings = { showSettings = true },
                                         autoStart = autoListen,
                                         onAutoStartConsumed = { autoListen = false },
                                     )
                                 } else {
                                     TasksScreen(
                                         prefs = prefs,
-                                        onOpenSettings = { configured = false },
+                                        onOpenSettings = { showSettings = true },
+                                        settingsRevision = settingsRevision,
                                     )
                                 }
                             }
@@ -296,6 +315,7 @@ private fun TabItem(
 fun VoiceScreen(
     prefs: Prefs,
     onChangeProject: () -> Unit,
+    onOpenSettings: () -> Unit,
     autoStart: Boolean = false,
     onAutoStartConsumed: () -> Unit = {},
 ) {
@@ -466,19 +486,34 @@ fun VoiceScreen(
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(modifier = Modifier.height(28.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(Palette.VioletHi, CircleShape)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.align(Alignment.Center),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(Palette.VioletHi, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "VIKUNJA VOICE",
+                        fontSize = 12.sp,
+                        letterSpacing = 4.sp,
+                        color = Palette.TextDim,
+                    )
+                }
                 Text(
-                    text = "VIKUNJA VOICE",
-                    fontSize = 12.sp,
-                    letterSpacing = 4.sp,
+                    text = "⚙",
+                    fontSize = 18.sp,
                     color = Palette.TextDim,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(onClick = onOpenSettings)
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
                 )
             }
             Spacer(modifier = Modifier.height(10.dp))
@@ -537,7 +572,7 @@ fun VoiceScreen(
                 },
                 onOpenSettings = {
                     showPicker = false
-                    onChangeProject()
+                    onOpenSettings()
                 },
             )
         }
