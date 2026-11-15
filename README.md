@@ -2,7 +2,9 @@
 
 Android-приложение: **говоришь задачу голосом — она появляется в [Vikunja](https://vikunja.io)**.
 
-![Главный экран](design/mockup_main.png)
+| Голос | Задачи | Настройки |
+|:---:|:---:|:---:|
+| ![Голос](docs/screens/voice.png) | ![Задачи](docs/screens/tasks.png) | ![Настройки](docs/screens/settings.png) |
 
 ## Как работает
 
@@ -85,4 +87,4 @@ VIKUNJA_URL=https://vikunja.example.com VIKUNJA_TOKEN=tk_... python tools/check_
 
 ## Дизайн
 
-Философия и палитра — [design/DESIGN.md](design/DESIGN.md), генератор мокапа — `design/make_mockup.py`.
+Философия и палитра — [design/DESIGN.md](design/DESIGN.md), состояния мордочки — `design/face_states.png`.
