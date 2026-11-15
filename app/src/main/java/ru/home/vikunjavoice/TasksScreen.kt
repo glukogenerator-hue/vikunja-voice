@@ -146,11 +146,13 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
                     .background(Palette.CardBg)
                     .border(1.dp, Palette.CardBorder, RoundedCornerShape(20.dp))
                     .clickable { showPicker = true }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(text = "Проект: ", fontSize = 13.sp, color = Palette.TextSub)
