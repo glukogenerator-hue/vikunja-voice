@@ -4,8 +4,10 @@ import json
 import os
 import urllib.request
 
-BASE = os.environ.get("VIKUNJA_URL", "https://task.urldot.ru")
+BASE = os.environ.get("VIKUNJA_URL", "").rstrip("/")
 TOK = os.environ.get("VIKUNJA_TOKEN", "")
+if not BASE:
+    raise SystemExit("Set VIKUNJA_URL (e.g. https://vikunja.example.com)")
 if not TOK:
     raise SystemExit("Set VIKUNJA_TOKEN (Settings -> API Tokens in Vikunja)")
 TITLE = "Тест голосового ввода (удалить)"

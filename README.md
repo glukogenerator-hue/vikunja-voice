@@ -80,7 +80,7 @@ minSdk 26, targetSdk 34.
 Проверка API из консоли:
 
 ```bash
-VIKUNJA_TOKEN=tk_... python tools/check_api.py
+VIKUNJA_URL=https://vikunja.example.com VIKUNJA_TOKEN=tk_... python tools/check_api.py
 ```
 
 ## Дизайн

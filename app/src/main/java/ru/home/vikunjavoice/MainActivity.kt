@@ -64,6 +64,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -73,6 +74,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -323,7 +326,7 @@ fun VoiceScreen(
     var dueText by remember { mutableStateOf<String?>(null) }
     var projectLabel by remember { mutableStateOf(prefs.projectTitle) }
     var showPicker by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("Готов") }
+    var status by remember { mutableStateOf("") }
     var statusColor by remember { mutableStateOf(Palette.TextSub) }
     var listening by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf(false) }
@@ -389,6 +392,7 @@ fun VoiceScreen(
     }
 
     val onStatus: (String) -> Unit = { status = it; statusColor = Palette.TextSub }
+    val onErrorStatus: (String) -> Unit = { status = it; statusColor = Palette.Amber }
     val onPartial: (String) -> Unit = { recognizedText = it }
     val onFinal: (String) -> Unit = {
         recognizedText = it
@@ -424,6 +428,13 @@ fun VoiceScreen(
         }
     }
 
+    /** Короткая вибрация-подтверждение. */
+    fun haptic(ms: Long) {
+        (activity.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)?.vibrate(
+            VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE)
+        )
+    }
+
     /** Нажали и держим — начинаем слушать. */
     fun beginRecording() {
         if (listening || sending) return
@@ -439,11 +450,10 @@ fun VoiceScreen(
         listening = true
         status = "Слушаю…"
         statusColor = Palette.TextSub
-        // Короткая вибрация подтверждает начало записи.
-        (activity.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)?.vibrate(
-            VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE)
+        haptic(25)
+        recognizer = startListening(
+            activity, onStatus, onErrorStatus, onPartial, onFinal, onRms, onDone
         )
-        recognizer = startListening(activity, onStatus, onPartial, onFinal, onRms, onDone)
     }
 
     /** Отпустили — останавливаем запись, движок отдаёт распознанное. */
@@ -453,6 +463,7 @@ fun VoiceScreen(
             onDone()
             return
         }
+        haptic(12) // отпустили — лёгкий отклик
         runCatching { current.stopListening() }
         // Страховка: если движок не ответит на stopListening, не залипнем в «Слушаю…».
         scope.launch {
@@ -460,8 +471,8 @@ fun VoiceScreen(
             if (listening) {
                 runCatching { current.destroy() }
                 onDone()
-                status = "Речь не распознана, попробуй ещё раз"
-                statusColor = Palette.TextSub
+                status = "Тишина… попробуем ещё раз"
+                statusColor = Palette.Amber
             }
         }
     }
@@ -500,31 +511,32 @@ fun VoiceScreen(
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = "VIKUNJA VOICE",
-                        fontSize = 12.sp,
-                        letterSpacing = 4.sp,
+                        fontSize = 11.sp,
+                        letterSpacing = 3.sp,
                         color = Palette.TextDim,
                     )
                 }
-                Text(
-                    text = "⚙",
-                    fontSize = 18.sp,
-                    color = Palette.TextDim,
+                Box(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .clip(RoundedCornerShape(10.dp))
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable(onClick = onOpenSettings)
-                        .padding(horizontal = 8.dp, vertical = 2.dp),
-                )
+                        .semantics { contentDescription = "Настройки" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = "⚙", fontSize = 18.sp, color = Palette.TextDim)
+                }
             }
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Palette.CardBg)
+                    .background(Palette.CardBg.copy(alpha = 0.55f))
                     .border(1.dp, Palette.CardBorder, RoundedCornerShape(20.dp))
                     .clickable { showPicker = true }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -535,28 +547,28 @@ fun VoiceScreen(
                     color = Palette.VioletHi,
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(text = "▾", fontSize = 12.sp, color = Palette.TextSub)
+                Text(text = "▾", fontSize = 14.sp, color = Palette.TextSub)
             }
             Spacer(modifier = Modifier.weight(1f))
-            TaskCard(
-                text = recognizedText,
-                dueText = dueText,
+            TaskCard(text = recognizedText, dueText = dueText)
+            Spacer(modifier = Modifier.weight(1f))
+            MicArea(
+                listening = listening,
+                enabled = !sending,
+                amplitude = wave.lastOrNull() ?: 0f,
+                onHoldStart = { beginRecording() },
+                onHoldEnd = { endRecording() },
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            StatusArea(
+                listening = listening,
+                wave = wave,
                 status = status,
                 statusColor = statusColor,
                 undoVisible = undoVisible,
                 onUndo = { undoLastCreation() },
             )
-            Spacer(modifier = Modifier.weight(1f))
-            MicArea(
-                listening = listening,
-                enabled = !sending,
-                wave = wave,
-                onHoldStart = { beginRecording() },
-                onHoldEnd = { endRecording() },
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "Голос → задача в Vikunja", fontSize = 12.sp, color = Palette.TextDim)
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
         }
         if (showPicker) {
             ProjectPickerDialog(
@@ -580,87 +592,43 @@ fun VoiceScreen(
 }
 
 @Composable
-private fun TaskCard(
-    text: String,
-    dueText: String?,
-    status: String,
-    statusColor: Color,
-    undoVisible: Boolean,
-    onUndo: () -> Unit,
-) {
+private fun TaskCard(text: String, dueText: String?) {
     Surface(
         shape = RoundedCornerShape(28.dp),
         color = Palette.CardBg,
         border = BorderStroke(1.dp, Palette.CardBorder),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        // Все строки имеют фиксированные места: частичные результаты распознавания
-        // и появление «Отменить» не двигают кнопку с волной.
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp, vertical = 16.dp),
-            contentAlignment = Alignment.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = text.ifBlank { "Здесь появится твоя задача" },
-                    fontSize = 22.sp,
-                    lineHeight = 30.sp,
-                    minLines = 2,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    color = if (text.isBlank()) Palette.TextSub else Palette.TextMain,
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(24.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (dueText != null) {
-                        Text(
-                            text = dueText,
-                            fontSize = 17.sp,
-                            color = Palette.VioletHi,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                        )
-                    }
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(34.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
+            Text(
+                text = text.ifBlank { "Здесь появится твоя задача" },
+                fontSize = 22.sp,
+                lineHeight = 30.sp,
+                minLines = 2,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                color = if (text.isBlank()) Palette.TextSub else Palette.TextMain,
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(26.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (dueText != null) {
                     Text(
-                        text = status,
-                        fontSize = 13.sp,
-                        color = statusColor,
+                        text = dueText,
+                        fontSize = 17.sp,
+                        color = Palette.VioletHi,
                         textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                        maxLines = 1,
                     )
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(20.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (undoVisible) {
-                        Text(
-                            text = "Отменить",
-                            fontSize = 13.sp,
-                            color = Palette.Amber,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable(onClick = onUndo)
-                                .padding(horizontal = 10.dp, vertical = 2.dp),
-                        )
-                    }
                 }
             }
         }
@@ -671,7 +639,7 @@ private fun TaskCard(
 private fun MicArea(
     listening: Boolean,
     enabled: Boolean,
-    wave: SnapshotStateList<Float>,
+    amplitude: Float,
     onHoldStart: () -> Unit,
     onHoldEnd: () -> Unit,
 ) {
@@ -682,6 +650,25 @@ private fun MicArea(
         animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing)),
         label = "ring",
     )
+
+    // Кнопка слегка «проседает» под пальцем.
+    var pressed by remember { mutableStateOf(false) }
+    val buttonScale by animateFloatAsState(
+        targetValue = if (pressed) 0.955f else 1f,
+        animationSpec = tween(120),
+        label = "micScale",
+    )
+
+    // Мордочка «моргает» раз в ~6 секунд, чтобы интерфейс был живее.
+    var blink by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(6000)
+            blink = true
+            delay(130)
+            blink = false
+        }
+    }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
@@ -704,6 +691,7 @@ private fun MicArea(
             Box(
                 modifier = Modifier
                     .size(MIC_SIZE_DP.dp)
+                    .scale(buttonScale)
                     .shadow(24.dp, CircleShape)
                     .background(
                         Brush.verticalGradient(listOf(Palette.VioletHi, Palette.VioletLo)),
@@ -713,30 +701,70 @@ private fun MicArea(
                         if (!enabled) return@pointerInput
                         detectTapGestures(
                             onPress = {
+                                pressed = true
                                 onHoldStart()
                                 tryAwaitRelease()
+                                pressed = false
                                 onHoldEnd()
                             },
                         )
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                TalkingFaceIcon(tint = Palette.BgTop, modifier = Modifier.size(76.dp))
+                TalkingFaceIcon(
+                    tint = Palette.BgTop,
+                    blink = blink,
+                    listening = listening,
+                    amplitude = amplitude,
+                    modifier = Modifier
+                        .size(76.dp)
+                        .semantics { contentDescription = "Записать задачу голосом" },
+                )
             }
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        Box(
-            modifier = Modifier.height(56.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (listening) {
-                WaveRow(wave = wave)
-            } else {
+    }
+}
+
+/** Обратная связь рядом с кнопкой: волна во время записи, статус/ошибка после. */
+@Composable
+private fun StatusArea(
+    listening: Boolean,
+    wave: SnapshotStateList<Float>,
+    status: String,
+    statusColor: Color,
+    undoVisible: Boolean,
+    onUndo: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(62.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (listening) {
+            WaveRow(wave = wave)
+        } else {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "Держи и говори",
+                    text = status.ifBlank { "Держи и говори" },
                     fontSize = 14.sp,
-                    color = Palette.TextSub,
+                    color = if (status.isBlank()) Palette.TextSub else statusColor,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                if (undoVisible) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Отменить",
+                        fontSize = 13.sp,
+                        color = Palette.Amber,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(onClick = onUndo)
+                            .padding(horizontal = 10.dp, vertical = 2.dp),
+                    )
+                }
             }
         }
     }
@@ -749,7 +777,7 @@ private fun WaveRow(wave: SnapshotStateList<Float>) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         wave.forEach { amp ->
-            val h = 8.dp + (amp.coerceIn(0f, 1f) * 64f).dp
+            val h = 8.dp + (amp.coerceIn(0f, 1f) * 48f).dp
             Box(
                 modifier = Modifier
                     .width(5.dp)
@@ -761,32 +789,50 @@ private fun WaveRow(wave: SnapshotStateList<Float>) {
     }
 }
 
-/** Говорящая мордочка: два глаза и приоткрытый рот. */
+/** Говорящая мордочка: моргает в покое и открывает рот в такт голосу. */
 @Composable
-private fun TalkingFaceIcon(tint: Color, modifier: Modifier = Modifier) {
+private fun TalkingFaceIcon(
+    tint: Color,
+    blink: Boolean,
+    listening: Boolean,
+    amplitude: Float,
+    modifier: Modifier = Modifier,
+) {
     Canvas(modifier = modifier) {
         val s = size.minDimension
         val cx = center.x
         val cy = center.y
-        // глаза
-        drawCircle(
-            color = tint,
-            radius = s * 0.06f,
-            center = Offset(cx - s * 0.19f, cy - s * 0.13f),
-        )
-        drawCircle(
-            color = tint,
-            radius = s * 0.06f,
-            center = Offset(cx + s * 0.19f, cy - s * 0.13f),
-        )
-        // приоткрытый рот — капсула
+        val eyeY = cy - s * 0.13f
+        val eyeR = s * 0.06f
+        if (blink) {
+            // закрытые глаза — короткие капсулы
+            val eyeW = s * 0.10f
+            val eyeH = s * 0.016f
+            listOf(cx - s * 0.19f, cx + s * 0.19f).forEach { ex ->
+                drawRoundRect(
+                    color = tint,
+                    topLeft = Offset(ex - eyeW / 2f, eyeY - eyeH / 2f),
+                    size = Size(eyeW, eyeH),
+                    cornerRadius = CornerRadius(eyeH / 2f, eyeH / 2f),
+                )
+            }
+        } else {
+            drawCircle(color = tint, radius = eyeR, center = Offset(cx - s * 0.19f, eyeY))
+            drawCircle(color = tint, radius = eyeR, center = Offset(cx + s * 0.19f, eyeY))
+        }
+        // рот: в покое приоткрыт, при записи — по амплитуде голоса
         val mouthW = s * 0.24f
-        val mouthH = s * 0.26f
+        val mouthH = if (listening) {
+            s * (0.10f + 0.30f * amplitude.coerceIn(0f, 1f))
+        } else {
+            s * 0.24f
+        }
+        val radius = minOf(mouthW, mouthH) / 2f
         drawRoundRect(
             color = tint,
             topLeft = Offset(cx - mouthW / 2f, cy + s * 0.02f),
             size = Size(mouthW, mouthH),
-            cornerRadius = CornerRadius(mouthW / 2f, mouthW / 2f),
+            cornerRadius = CornerRadius(radius, radius),
         )
     }
 }
@@ -795,13 +841,14 @@ private fun TalkingFaceIcon(tint: Color, modifier: Modifier = Modifier) {
 fun startListening(
     activity: Activity,
     onStatus: (String) -> Unit,
+    onErrorStatus: (String) -> Unit,
     onPartial: (String) -> Unit,
     onFinal: (String) -> Unit,
     onRms: (Float) -> Unit,
     onDone: () -> Unit,
 ): SpeechRecognizer? {
     if (!SpeechRecognizer.isRecognitionAvailable(activity)) {
-        onStatus("Распознавание недоступно: на телефоне нет голосового ввода (приложение Google)")
+        onErrorStatus("Распознавание недоступно — нужен голосовой ввод Google")
         onDone()
         return null
     }
@@ -822,14 +869,14 @@ fun startListening(
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() = onStatus("Обрабатываю…")
         override fun onError(error: Int) {
-            onStatus(
+            onErrorStatus(
                 when (error) {
-                    SpeechRecognizer.ERROR_NO_MATCH -> "Речи не услышал, попробуй ещё раз"
-                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Тишина — попробуй ещё раз"
-                    SpeechRecognizer.ERROR_NETWORK -> "Ошибка сети (распознавание идёт через Google)"
+                    SpeechRecognizer.ERROR_NO_MATCH -> "Не расслышал — повтори"
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Тишина… попробуем ещё раз"
+                    SpeechRecognizer.ERROR_NETWORK -> "Нет сети для распознавания"
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Нет разрешения на микрофон"
-                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Распознаватель занят, подожди секунду"
-                    SpeechRecognizer.ERROR_CLIENT -> "Ничего не поймал — подержи кнопку подольше"
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Распознаватель занят, секунду"
+                    SpeechRecognizer.ERROR_CLIENT -> "Не уловил голос — подержи кнопку подольше"
                     else -> "Ошибка распознавания (код $error)"
                 }
             )
@@ -849,7 +896,7 @@ fun startListening(
                 ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()
             if (text.isNullOrBlank()) {
-                onStatus("Речь не распознана, попробуй ещё раз")
+                onErrorStatus("Не расслышал — повтори")
             } else {
                 onFinal(text)
             }

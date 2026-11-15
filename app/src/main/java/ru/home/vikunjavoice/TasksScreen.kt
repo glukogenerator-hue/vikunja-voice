@@ -37,6 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -141,15 +143,16 @@ fun TasksScreen(
                     color = Palette.TextDim,
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "⚙",
-                    fontSize = 18.sp,
-                    color = Palette.TextDim,
+                Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable(onClick = onOpenSettings)
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                )
+                        .semantics { contentDescription = "Настройки" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = "⚙", fontSize = 18.sp, color = Palette.TextDim)
+                }
                 Text(
                     text = "Обновить",
                     fontSize = 13.sp,
@@ -165,7 +168,7 @@ fun TasksScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(18.dp))
-                    .background(Palette.CardBg)
+                    .background(Palette.CardBg.copy(alpha = 0.55f))
                     .border(1.dp, Palette.CardBorder, RoundedCornerShape(18.dp))
                     .clickable { showPicker = true }
                     .padding(horizontal = 14.dp, vertical = 7.dp),
@@ -179,7 +182,7 @@ fun TasksScreen(
                     color = Palette.VioletHi,
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(text = "▾", fontSize = 11.sp, color = Palette.TextSub)
+                Text(text = "▾", fontSize = 14.sp, color = Palette.TextSub)
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

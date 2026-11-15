@@ -143,10 +143,10 @@ fun ShareScreen(prefs: Prefs, sharedText: String, onDone: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Palette.CardBg)
+                    .background(Palette.CardBg.copy(alpha = 0.55f))
                     .border(1.dp, Palette.CardBorder, RoundedCornerShape(20.dp))
                     .clickable { showPicker = true }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -157,7 +157,7 @@ fun ShareScreen(prefs: Prefs, sharedText: String, onDone: () -> Unit) {
                     color = Palette.VioletHi,
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(text = "▾", fontSize = 12.sp, color = Palette.TextSub)
+                Text(text = "▾", fontSize = 14.sp, color = Palette.TextSub)
             }
             Spacer(modifier = Modifier.height(20.dp))
             Button(
