@@ -92,16 +92,84 @@ class MainActivity : ComponentActivity() {
             ) {
                 val prefs = remember { Prefs(appContext) }
                 var configured by remember { mutableStateOf(prefs.configured) }
+                var tab by remember { mutableStateOf(0) }
                 if (configured) {
-                    VoiceScreen(
-                        prefs = prefs,
-                        onChangeProject = { configured = false },
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Palette.BgTop)
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (tab == 0) {
+                                VoiceScreen(
+                                    prefs = prefs,
+                                    onChangeProject = { configured = false },
+                                )
+                            } else {
+                                TasksScreen(
+                                    prefs = prefs,
+                                    onOpenSettings = { configured = false },
+                                )
+                            }
+                        }
+                        BottomTabs(selected = tab, onSelect = { tab = it })
+                    }
                 } else {
                     SetupScreen(prefs = prefs, onDone = { configured = true })
                 }
             }
         }
+    }
+}
+
+/** Нижнее переключение экранов: «Голос» и «Задачи». */
+@Composable
+private fun BottomTabs(selected: Int, onSelect: (Int) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Palette.BgTop)
+            .padding(horizontal = 24.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        TabItem(
+            text = "Голос",
+            selected = selected == 0,
+            modifier = Modifier.weight(1f),
+        ) { onSelect(0) }
+        TabItem(
+            text = "Задачи",
+            selected = selected == 1,
+            modifier = Modifier.weight(1f),
+        ) { onSelect(1) }
+    }
+}
+
+@Composable
+private fun TabItem(
+    text: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) Palette.VioletHi else Palette.CardBg)
+            .border(
+                width = 1.dp,
+                color = if (selected) Palette.VioletHi else Palette.CardBorder,
+                shape = RoundedCornerShape(16.dp),
+            )
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            color = if (selected) Palette.BgTop else Palette.TextSub,
+        )
     }
 }
 

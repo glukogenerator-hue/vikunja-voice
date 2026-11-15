@@ -14,4 +14,5 @@ object Palette {
     val TextSub = Color(0xFF7A8599)
     val TextDim = Color(0xFF4A5568)
     val Error = Color(0xFFFF6B6B)
+    val Amber = Color(0xFFFFB86B)
 }
