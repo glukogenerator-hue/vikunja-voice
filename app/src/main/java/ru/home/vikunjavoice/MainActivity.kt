@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package ru.home.vikunjavoice
 
 import android.Manifest
@@ -13,8 +15,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -36,6 +40,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -102,15 +108,19 @@ class MainActivity : ComponentActivity() {
             ) {
                 val prefs = remember { Prefs(appContext) }
                 var configured by remember { mutableStateOf(prefs.configured) }
-                var tab by remember { mutableStateOf(0) }
                 if (configured) {
+                    val pagerState = rememberPagerState(pageCount = { 2 })
+                    val scope = rememberCoroutineScope()
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(Palette.BgTop)
                     ) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            if (tab == 0) {
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.weight(1f),
+                        ) { page ->
+                            if (page == 0) {
                                 VoiceScreen(
                                     prefs = prefs,
                                     onChangeProject = { configured = false },
@@ -122,7 +132,12 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
-                        BottomTabs(selected = tab, onSelect = { tab = it })
+                        BottomTabs(
+                            selected = pagerState.currentPage,
+                            onSelect = { index ->
+                                scope.launch { pagerState.animateScrollToPage(index) }
+                            },
+                        )
                     }
                 } else {
                     SetupScreen(prefs = prefs, onDone = { configured = true })
@@ -159,15 +174,14 @@ private fun scheduleProjectsSync(context: Context) {
     }
 }
 
-/** Нижнее переключение экранов: «Голос» и «Задачи». */
+/** Нижние вкладки: текст + плавно проявляющийся индикатор. */
 @Composable
 private fun BottomTabs(selected: Int, onSelect: (Int) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(Palette.BgTop)
-            .padding(horizontal = 24.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 24.dp, vertical = 6.dp),
     ) {
         TabItem(
             text = "Голос",
@@ -189,23 +203,30 @@ private fun TabItem(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    Box(
+    val textColor by animateColorAsState(
+        targetValue = if (selected) Palette.TextMain else Palette.TextSub,
+        label = "tabColor",
+    )
+    val indicatorAlpha by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = tween(220),
+        label = "tabIndicator",
+    )
+    Column(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (selected) Palette.VioletHi else Palette.CardBg)
-            .border(
-                width = 1.dp,
-                color = if (selected) Palette.VioletHi else Palette.CardBorder,
-                shape = RoundedCornerShape(16.dp),
-            )
+            .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center,
+            .padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = text,
-            fontSize = 14.sp,
-            color = if (selected) Palette.BgTop else Palette.TextSub,
+        Text(text = text, fontSize = 14.sp, color = textColor)
+        Spacer(modifier = Modifier.height(6.dp))
+        Box(
+            modifier = Modifier
+                .height(3.dp)
+                .width(26.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(Palette.VioletHi.copy(alpha = indicatorAlpha))
         )
     }
 }
