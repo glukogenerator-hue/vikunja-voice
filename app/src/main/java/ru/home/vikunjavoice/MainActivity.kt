@@ -56,7 +56,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -335,7 +334,7 @@ private fun MicArea(
                     .clickable(enabled = enabled, onClick = onClick),
                 contentAlignment = Alignment.Center,
             ) {
-                MicIcon(tint = Palette.BgTop, modifier = Modifier.size(72.dp))
+                TalkingFaceIcon(tint = Palette.BgTop, modifier = Modifier.size(76.dp))
             }
         }
         Spacer(modifier = Modifier.height(24.dp))
@@ -385,43 +384,32 @@ private fun WaveRow(wave: SnapshotStateList<Float>) {
     }
 }
 
-/** Иконка микрофона: капсула + дуга-держатель + ножка с основанием. */
+/** Говорящая мордочка: два глаза и приоткрытый рот. */
 @Composable
-private fun MicIcon(tint: Color, modifier: Modifier = Modifier) {
+private fun TalkingFaceIcon(tint: Color, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val s = size.minDimension
         val cx = center.x
-        val cy = center.y - s * 0.06f
-        val mw = s * 0.12f
-        val mh = s * 0.20f
+        val cy = center.y
+        // глаза
+        drawCircle(
+            color = tint,
+            radius = s * 0.06f,
+            center = Offset(cx - s * 0.19f, cy - s * 0.13f),
+        )
+        drawCircle(
+            color = tint,
+            radius = s * 0.06f,
+            center = Offset(cx + s * 0.19f, cy - s * 0.13f),
+        )
+        // приоткрытый рот — капсула
+        val mouthW = s * 0.24f
+        val mouthH = s * 0.26f
         drawRoundRect(
             color = tint,
-            topLeft = Offset(cx - mw, cy - mh),
-            size = Size(mw * 2f, mh * 2f),
-            cornerRadius = CornerRadius(mw, mw),
-        )
-        val arcR = s * 0.28f
-        drawArc(
-            color = tint,
-            startAngle = 25f,
-            sweepAngle = 130f,
-            useCenter = false,
-            style = Stroke(width = s * 0.055f),
-            topLeft = Offset(cx - arcR, cy - arcR),
-            size = Size(arcR * 2f, arcR * 2f),
-        )
-        val stemBottom = cy + arcR + s * 0.10f
-        drawLine(
-            color = tint,
-            start = Offset(cx, cy + mh * 0.5f),
-            end = Offset(cx, stemBottom),
-            strokeWidth = s * 0.055f,
-        )
-        drawLine(
-            color = tint,
-            start = Offset(cx - s * 0.10f, stemBottom),
-            end = Offset(cx + s * 0.10f, stemBottom),
-            strokeWidth = s * 0.045f,
+            topLeft = Offset(cx - mouthW / 2f, cy + s * 0.02f),
+            size = Size(mouthW, mouthH),
+            cornerRadius = CornerRadius(mouthW / 2f, mouthW / 2f),
         )
     }
 }

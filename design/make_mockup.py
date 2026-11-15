@@ -56,22 +56,22 @@ def spaced_text(draw_img, cx, y, text, font, tracking, fill):
         x += w
 
 
-def mic_glyph(img, cx, cy, size, color):
-    """Иконка микрофона из примитивов: капсула + дуга + ножка."""
+def face_glyph(img, cx, cy, size, color):
+    """Говорящая мордочка: два глаза и приоткрытый рот."""
     d = ImageDraw.Draw(img, "RGBA")
-    mw = int(size * 0.34)          # половина ширины капсулы
-    mh = int(size * 0.42)          # полувысота капсулы
-    top = cy - mh
-    d.rounded_rectangle((cx - mw, top, cx + mw, cy + mh), radius=mw, fill=color)
-    arc_r = int(size * 0.46)
-    bb = (cx - arc_r, cy - int(size * 0.22), cx + arc_r, cy + int(size * 0.62))
-    d.arc(bb, start=30, end=150, fill=color, width=int(size * 0.05))
-    stem_h = int(size * 0.20)
-    d.line((cx, cy + int(size * 0.30), cx, cy + int(size * 0.30) + stem_h),
-           fill=color, width=int(size * 0.05))
-    d.line((cx - int(size * 0.12), cy + int(size * 0.30) + stem_h,
-            cx + int(size * 0.12), cy + int(size * 0.30) + stem_h),
-           fill=color, width=int(size * 0.04))
+    eye_r = int(size * 0.06)
+    for dx in (-0.19, 0.19):
+        ex = cx + int(size * dx)
+        ey = cy - int(size * 0.13)
+        d.ellipse((ex - eye_r, ey - eye_r, ex + eye_r, ey + eye_r), fill=color)
+    mouth_w = int(size * 0.24)
+    mouth_h = int(size * 0.26)
+    top = cy + int(size * 0.02)
+    d.rounded_rectangle(
+        (cx - mouth_w // 2, top, cx + mouth_w // 2, top + mouth_h),
+        radius=mouth_w // 2,
+        fill=color,
+    )
 
 
 def phone(x, y, w, h, listening):
@@ -111,7 +111,7 @@ def phone(x, y, w, h, listening):
             pd.ellipse((cx - rr, cy - rr, cx + rr, cy + rr),
                        outline=VIOLET_HI + (alpha,), width=3)
     circle_gradient(canvas, cx, cy, r, VIOLET_HI, VIOLET_LO)
-    mic_glyph(canvas, cx, cy, 150, PHONE_TOP)
+    face_glyph(canvas, cx, cy, 150, PHONE_TOP)
 
     # волна голоса (только в состоянии «слушаю»)
     if listening:
