@@ -36,6 +36,12 @@ git push origin v0.14
 Подпись берётся из секретов репозитория: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
 `KEY_ALIAS`, `KEY_PASSWORD` (см. `.github/workflows/release.yml`).
 
+## Кэш проектов
+
+Список проектов кэшируется в `SharedPreferences` (привязан к адресу сервера) и обновляется
+в фоне через WorkManager: раз в 6 часов, а также при запуске, если кэш старше 3 часов.
+Диалог выбора проекта показывает кэш сразу и тихо подтягивает свежий список — работает и без сети.
+
 ## Сборка
 
 Нужны JDK 17 и Android SDK (platform 34, build-tools 34.0.0). Android Studio не обязателен:

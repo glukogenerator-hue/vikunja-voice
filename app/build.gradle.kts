@@ -19,8 +19,8 @@ android {
         applicationId = "ru.home.vikunjavoice"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15
-        versionName = "0.15"
+        versionCode = 16
+        versionName = "0.16"
     }
 
     signingConfigs {
@@ -66,5 +66,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
     testImplementation("junit:junit:4.13.2")
 }

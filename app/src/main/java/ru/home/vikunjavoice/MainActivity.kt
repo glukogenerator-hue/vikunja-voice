@@ -2,6 +2,7 @@ package ru.home.vikunjavoice
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -66,11 +67,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 private const val MIC_SIZE_DP = 180
 
@@ -81,6 +90,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val appContext = applicationContext
+        scheduleProjectsSync(appContext)
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
@@ -119,6 +129,33 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+}
+
+/** Кэш проектов обновляем в фоне: периодически и сразу, если он устарел. */
+private fun scheduleProjectsSync(context: Context) {
+    val constraints = Constraints.Builder()
+        .setRequiredNetworkType(NetworkType.CONNECTED)
+        .build()
+
+    val periodic = PeriodicWorkRequestBuilder<ProjectsSyncWorker>(6, TimeUnit.HOURS)
+        .setConstraints(constraints)
+        .build()
+    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        "projects-sync",
+        ExistingPeriodicWorkPolicy.KEEP,
+        periodic,
+    )
+
+    if (ProjectsCache(context).isStale(3 * 60 * 60 * 1000L)) {
+        val once = OneTimeWorkRequestBuilder<ProjectsSyncWorker>()
+            .setConstraints(constraints)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "projects-refresh",
+            ExistingWorkPolicy.KEEP,
+            once,
+        )
     }
 }
 

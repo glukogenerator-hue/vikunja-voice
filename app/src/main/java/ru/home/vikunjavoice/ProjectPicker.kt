@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -43,15 +44,23 @@ fun ProjectPickerDialog(
     onPick: (VikunjaProject) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    var projects by remember { mutableStateOf<List<VikunjaProject>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
+    val context = LocalContext.current
+    val cache = remember { ProjectsCache(context.applicationContext) }
+    var projects by remember { mutableStateOf(cache.load(prefs.serverUrl)) }
+    var loading by remember { mutableStateOf(projects.isEmpty()) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
+        // Сначала показываем кэш (без ожидания), затем quietly обновляем его.
         try {
-            projects = VikunjaApi(prefs.serverUrl, prefs.token).projects()
+            val fresh = VikunjaApi(prefs.serverUrl, prefs.token).projects()
+            projects = fresh
+            cache.save(prefs.serverUrl, fresh)
+            error = null
         } catch (e: Exception) {
-            error = e.message ?: "Не удалось получить проекты"
+            if (projects.isEmpty()) {
+                error = e.message ?: "Не удалось получить проекты"
+            }
         } finally {
             loading = false
         }

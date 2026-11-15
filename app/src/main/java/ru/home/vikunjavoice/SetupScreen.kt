@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -55,6 +56,7 @@ fun SetupScreen(prefs: Prefs, onDone: () -> Unit) {
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     fun loadProjects() {
         if (serverUrl.isBlank() || token.isBlank()) {
@@ -67,6 +69,7 @@ fun SetupScreen(prefs: Prefs, onDone: () -> Unit) {
             try {
                 val list = VikunjaApi(serverUrl, token).projects()
                 projects = list
+                ProjectsCache(context.applicationContext).save(serverUrl, list)
                 selected = list.firstOrNull { it.id == prefs.projectId } ?: list.firstOrNull()
                 if (list.isEmpty()) error = "На сервере нет проектов"
             } catch (e: Exception) {
