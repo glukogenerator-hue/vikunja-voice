@@ -22,6 +22,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,12 +59,14 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -111,10 +114,11 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
     var dueText by remember { mutableStateOf<String?>(null) }
     var projectLabel by remember { mutableStateOf(prefs.projectTitle) }
     var showPicker by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("Нажми и скажи задачу") }
+    var status by remember { mutableStateOf("Готов") }
     var statusColor by remember { mutableStateOf(Palette.TextSub) }
     var listening by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf(false) }
+    var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
     val wave = remember {
         mutableStateListOf<Float>().apply { repeat(26) { add(0f) } }
     }
@@ -170,6 +174,7 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
     }
     val onDone: () -> Unit = {
         listening = false
+        recognizer = null
         for (i in wave.indices) wave[i] = 0f
     }
 
@@ -177,25 +182,48 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            listening = true
-            startListening(activity, onStatus, onPartial, onFinal, onRms, onDone)
+            status = "Разрешение выдано — держи кнопку"
         } else {
             status = "Нужно разрешение на микрофон"
             statusColor = Palette.Error
         }
     }
 
-    fun go() {
+    /** Нажали и держим — начинаем слушать. */
+    fun beginRecording() {
+        if (listening || sending) return
         recognizedText = ""
         dueText = null
         val granted = ContextCompat.checkSelfPermission(
             activity, Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            listening = true
-            startListening(activity, onStatus, onPartial, onFinal, onRms, onDone)
-        } else {
+        if (!granted) {
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        listening = true
+        status = "Слушаю…"
+        statusColor = Palette.TextSub
+        recognizer = startListening(activity, onStatus, onPartial, onFinal, onRms, onDone)
+    }
+
+    /** Отпустили — останавливаем запись, движок отдаёт распознанное. */
+    fun endRecording() {
+        val current = recognizer
+        if (current == null) {
+            onDone()
+            return
+        }
+        runCatching { current.stopListening() }
+        // Страховка: если движок не ответит на stopListening, не залипнем в «Слушаю…».
+        scope.launch {
+            delay(2500)
+            if (listening) {
+                runCatching { current.destroy() }
+                onDone()
+                status = "Речь не распознана, попробуй ещё раз"
+                statusColor = Palette.TextSub
+            }
         }
     }
 
@@ -251,7 +279,8 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
                 listening = listening,
                 enabled = !sending,
                 wave = wave,
-                onClick = { if (!sending) go() },
+                onHoldStart = { beginRecording() },
+                onHoldEnd = { endRecording() },
             )
             Spacer(modifier = Modifier.height(48.dp))
             Text(text = "M2 · голос → задача в Vikunja", fontSize = 12.sp, color = Palette.TextDim)
@@ -331,7 +360,8 @@ private fun MicArea(
     listening: Boolean,
     enabled: Boolean,
     wave: SnapshotStateList<Float>,
-    onClick: () -> Unit,
+    onHoldStart: () -> Unit,
+    onHoldEnd: () -> Unit,
 ) {
     val transition = rememberInfiniteTransition(label = "rings")
     val ring by transition.animateFloat(
@@ -367,7 +397,16 @@ private fun MicArea(
                         Brush.verticalGradient(listOf(Palette.VioletHi, Palette.VioletLo)),
                         CircleShape
                     )
-                    .clickable(enabled = enabled, onClick = onClick),
+                    .pointerInput(enabled) {
+                        if (!enabled) return@pointerInput
+                        detectTapGestures(
+                            onPress = {
+                                onHoldStart()
+                                tryAwaitRelease()
+                                onHoldEnd()
+                            },
+                        )
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 TalkingFaceIcon(tint = Palette.BgTop, modifier = Modifier.size(76.dp))
@@ -382,7 +421,7 @@ private fun MicArea(
                 WaveRow(wave = wave)
             } else {
                 Text(
-                    text = "Нажми и скажи задачу",
+                    text = "Держи и говори",
                     fontSize = 14.sp,
                     color = Palette.TextSub,
                 )
@@ -440,7 +479,7 @@ private fun TalkingFaceIcon(tint: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/** Запускает системный SpeechRecognizer с русским языком. */
+/** Запускает системный SpeechRecognizer; возвращает его, чтобы можно было остановить по отпусканию. */
 fun startListening(
     activity: Activity,
     onStatus: (String) -> Unit,
@@ -448,16 +487,21 @@ fun startListening(
     onFinal: (String) -> Unit,
     onRms: (Float) -> Unit,
     onDone: () -> Unit,
-) {
+): SpeechRecognizer? {
     if (!SpeechRecognizer.isRecognitionAvailable(activity)) {
         onStatus("Распознавание недоступно: на телефоне нет голосового ввода (приложение Google)")
-        return
+        onDone()
+        return null
     }
     val recognizer = SpeechRecognizer.createSpeechRecognizer(activity)
     val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
         putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU")
         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        // Пока палец на кнопке — не обрывать запись на паузах.
+        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 30_000L)
+        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 30_000L)
+        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 30_000L)
     }
     recognizer.setRecognitionListener(object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) = onStatus("Слушаю…")
@@ -473,6 +517,7 @@ fun startListening(
                     SpeechRecognizer.ERROR_NETWORK -> "Ошибка сети (распознавание идёт через Google)"
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Нет разрешения на микрофон"
                     SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Распознаватель занят, подожди секунду"
+                    SpeechRecognizer.ERROR_CLIENT -> "Ничего не поймал — подержи кнопку подольше"
                     else -> "Ошибка распознавания (код $error)"
                 }
             )
@@ -503,4 +548,5 @@ fun startListening(
         override fun onEvent(eventType: Int, params: Bundle?) {}
     })
     recognizer.startListening(intent)
+    return recognizer
 }
