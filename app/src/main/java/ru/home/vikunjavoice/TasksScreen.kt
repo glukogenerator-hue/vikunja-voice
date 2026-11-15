@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -64,6 +66,7 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var reloadKey by remember { mutableStateOf(0) }
     var toDelete by remember { mutableStateOf<VikunjaTask?>(null) }
+    var showCompleted by remember { mutableStateOf(prefs.showCompleted) }
     val scope = rememberCoroutineScope()
     val api = remember { VikunjaApi(prefs.serverUrl, prefs.token) }
 
@@ -164,7 +167,35 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(text = "▾", fontSize = 12.sp, color = Palette.TextSub)
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Показывать выполненные",
+                    fontSize = 13.sp,
+                    color = Palette.TextSub,
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Switch(
+                    checked = showCompleted,
+                    onCheckedChange = { checked ->
+                        showCompleted = checked
+                        prefs.showCompleted = checked
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Palette.BgTop,
+                        checkedTrackColor = Palette.VioletHi,
+                        uncheckedThumbColor = Palette.TextSub,
+                        uncheckedTrackColor = Palette.CardBorder,
+                    ),
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val visibleTasks =
+                if (showCompleted) tasks else tasks.filterNot { it.done }
 
             when {
                 loading -> Box(
@@ -177,13 +208,17 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
                     )
                 }
 
-                tasks.isEmpty() -> Box(
+                visibleTasks.isEmpty() -> Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = error?.let { "Ошибка: $it" } ?: "В проекте пока нет задач",
+                            text = when {
+                                error != null -> "Ошибка: $error"
+                                tasks.isEmpty() -> "В проекте пока нет задач"
+                                else -> "Все задачи выполнены"
+                            },
                             fontSize = 14.sp,
                             color = if (error != null) Palette.Error else Palette.TextSub,
                             textAlign = TextAlign.Center,
@@ -202,7 +237,7 @@ fun TasksScreen(prefs: Prefs, onOpenSettings: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(bottom = 16.dp),
                 ) {
-                    items(tasks, key = { it.id }) { task ->
+                    items(visibleTasks, key = { it.id }) { task ->
                         TaskRow(
                             task = task,
                             onToggle = { toggle(task) },

@@ -22,6 +22,11 @@ class Prefs(context: Context) {
         get() = sp.getString("project_title", "").orEmpty()
         set(value) = sp.edit().putString("project_title", value).apply()
 
+    /** Показывать выполненные задачи в списке (по умолчанию — нет). */
+    var showCompleted: Boolean
+        get() = sp.getBoolean("show_completed", false)
+        set(value) = sp.edit().putBoolean("show_completed", value).apply()
+
     val configured: Boolean
         get() = serverUrl.isNotBlank() && token.isNotBlank() && projectId > 0
 }
