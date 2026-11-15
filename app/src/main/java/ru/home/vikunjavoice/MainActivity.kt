@@ -63,6 +63,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private const val MIC_SIZE_DP = 180
 
@@ -100,6 +103,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
     var recognizedText by remember { mutableStateOf("") }
+    var dueText by remember { mutableStateOf<String?>(null) }
     var status by remember { mutableStateOf("Нажми и скажи задачу") }
     var statusColor by remember { mutableStateOf(Palette.TextSub) }
     var listening by remember { mutableStateOf(false) }
@@ -111,12 +115,22 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     fun submit(text: String) {
+        // Разбор полностью локальный: дата/время из фразы, чистый заголовок.
+        val parsed = RussianDateParser.parse(text)
+        recognizedText = parsed.title
+        val due = parsed.due
+        val dueLabel = due?.format(DateTimeFormatter.ofPattern("d MMMM, HH:mm", Locale("ru")))
+        dueText = dueLabel
+        val dueIso = due
+            ?.withZoneSameInstant(ZoneOffset.UTC)
+            ?.format(DateTimeFormatter.ISO_INSTANT)
         sending = true
-        status = "Отправляю в Vikunja…"
+        status = if (dueLabel != null) "Отправляю в Vikunja · $dueLabel…" else "Отправляю в Vikunja…"
         statusColor = Palette.TextSub
         scope.launch {
             try {
-                VikunjaApi(prefs.serverUrl, prefs.token).createTask(prefs.projectId, text)
+                VikunjaApi(prefs.serverUrl, prefs.token)
+                    .createTask(prefs.projectId, parsed.title, dueIso)
                 status = "Задача создана ✓"
                 statusColor = Palette.VioletHi
             } catch (e: Exception) {
@@ -157,6 +171,7 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
 
     fun go() {
         recognizedText = ""
+        dueText = null
         val granted = ContextCompat.checkSelfPermission(
             activity, Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
@@ -212,7 +227,7 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
                 )
             }
             Spacer(modifier = Modifier.weight(1f))
-            TaskCard(recognizedText, status, statusColor)
+            TaskCard(recognizedText, dueText, status, statusColor)
             Spacer(modifier = Modifier.weight(1.1f))
             MicArea(
                 listening = listening,
@@ -228,7 +243,7 @@ fun VoiceScreen(prefs: Prefs, onChangeProject: () -> Unit) {
 }
 
 @Composable
-private fun TaskCard(text: String, status: String, statusColor: Color) {
+private fun TaskCard(text: String, dueText: String?, status: String, statusColor: Color) {
     Surface(
         shape = RoundedCornerShape(28.dp),
         color = Palette.CardBg,
@@ -246,6 +261,15 @@ private fun TaskCard(text: String, status: String, statusColor: Color) {
                 textAlign = TextAlign.Center,
                 color = if (text.isBlank()) Palette.TextSub else Palette.TextMain,
             )
+            if (dueText != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = dueText,
+                    fontSize = 17.sp,
+                    color = Palette.VioletHi,
+                    textAlign = TextAlign.Center,
+                )
+            }
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = status,

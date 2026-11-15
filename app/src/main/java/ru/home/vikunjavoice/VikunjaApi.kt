@@ -46,14 +46,16 @@ class VikunjaApi(serverUrl: String, private val token: String) {
         }
     }
 
-    suspend fun createTask(projectId: Long, title: String): Long = withContext(Dispatchers.IO) {
-        val payload = JSONObject().put("title", title).toString()
-        val request = Request.Builder()
-            .url("$base/api/v1/projects/$projectId/tasks")
-            .header("Authorization", "Bearer $token")
-            // Vikunja создаёт задачу методом PUT (POST отвечает 405).
-            .put(payload.toRequestBody("application/json".toMediaType()))
-            .build()
+    suspend fun createTask(projectId: Long, title: String, dueIso: String? = null): Long =
+        withContext(Dispatchers.IO) {
+            val payload = JSONObject().put("title", title)
+            if (dueIso != null) payload.put("due_date", dueIso)
+            val request = Request.Builder()
+                .url("$base/api/v1/projects/$projectId/tasks")
+                .header("Authorization", "Bearer $token")
+                // Vikunja создаёт задачу методом PUT (POST отвечает 405).
+                .put(payload.toString().toRequestBody("application/json".toMediaType()))
+                .build()
         client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) throw ApiException(describe(response.code, body))
