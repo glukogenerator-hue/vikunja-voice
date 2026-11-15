@@ -2,9 +2,9 @@
 
 Android-приложение: **говоришь задачу голосом — она появляется в [Vikunja](https://vikunja.io)**.
 
-| Голос | Задачи | Настройки |
-|:---:|:---:|:---:|
-| ![Голос](docs/screens/voice.png) | ![Задачи](docs/screens/tasks.png) | ![Настройки](docs/screens/settings.png) |
+| Голос | Задачи |
+|:---:|:---:|
+| ![Голос](docs/screens/voice.png) | ![Задачи](docs/screens/tasks.png) |
 
 ## Как работает
 
