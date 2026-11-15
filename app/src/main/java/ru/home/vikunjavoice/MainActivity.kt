@@ -339,41 +339,43 @@ private fun WaveRow(wave: SnapshotStateList<Float>) {
     }
 }
 
-/** Иконка микрофона: капсула + дуга-держатель + ножка. */
+/** Иконка микрофона: капсула + дуга-держатель + ножка с основанием. */
 @Composable
 private fun MicIcon(tint: Color, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val s = size.minDimension
         val cx = center.x
-        val cy = center.y - s * 0.04f
-        val mw = s * 0.17f
-        val mh = s * 0.21f
+        val cy = center.y - s * 0.06f
+        val mw = s * 0.12f
+        val mh = s * 0.20f
         drawRoundRect(
             color = tint,
             topLeft = Offset(cx - mw, cy - mh),
             size = Size(mw * 2f, mh * 2f),
             cornerRadius = CornerRadius(mw, mw),
         )
+        val arcR = s * 0.28f
         drawArc(
             color = tint,
-            startAngle = 30f,
-            sweepAngle = 120f,
+            startAngle = 25f,
+            sweepAngle = 130f,
             useCenter = false,
-            style = Stroke(width = s * 0.05f),
-            topLeft = Offset(cx - s * 0.46f, cy - s * 0.22f),
-            size = Size(s * 0.92f, s * 0.84f),
+            style = Stroke(width = s * 0.055f),
+            topLeft = Offset(cx - arcR, cy - arcR),
+            size = Size(arcR * 2f, arcR * 2f),
+        )
+        val stemBottom = cy + arcR + s * 0.10f
+        drawLine(
+            color = tint,
+            start = Offset(cx, cy + mh * 0.5f),
+            end = Offset(cx, stemBottom),
+            strokeWidth = s * 0.055f,
         )
         drawLine(
             color = tint,
-            start = Offset(cx, cy + s * 0.30f),
-            end = Offset(cx, cy + s * 0.50f),
-            strokeWidth = s * 0.05f,
-        )
-        drawLine(
-            color = tint,
-            start = Offset(cx - s * 0.12f, cy + s * 0.50f),
-            end = Offset(cx + s * 0.12f, cy + s * 0.50f),
-            strokeWidth = s * 0.04f,
+            start = Offset(cx - s * 0.10f, stemBottom),
+            end = Offset(cx + s * 0.10f, stemBottom),
+            strokeWidth = s * 0.045f,
         )
     }
 }
