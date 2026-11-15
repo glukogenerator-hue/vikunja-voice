@@ -7,6 +7,9 @@ app/build/
 
 # Local machine config
 local.properties
+keystore.properties
+*.keystore
+*.jks
 .idea/
 *.iml
 .DS_Store
