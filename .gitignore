@@ -1,0 +1,15 @@
+# Build
+.gradle/
+build/
+app/build/
+*.apk
+*.aab
+
+# Local machine config
+local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Captures
+captures/
